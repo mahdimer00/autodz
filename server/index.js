@@ -19,7 +19,13 @@ import {
 } from "./db.js";
 import { createFormToken, verifyFormToken, hashIp, integrityHash, shortFingerprint } from "./security.js";
 import { sendTelegramNotification, isTelegramConfigured } from "./telegram.js";
-import { adminAuth, isAdminConfigured } from "./adminAuth.js";
+import {
+  isAdminConfigured,
+  checkCredentials,
+  requireSession,
+  setSessionCookie,
+  clearSessionCookie,
+} from "./adminAuth.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -71,6 +77,15 @@ const publicCors = cors({
   methods: ["GET", "POST"],
 });
 
+// A cross-origin POST with a JSON body triggers a CORS preflight (an OPTIONS
+// request to the same path) before the browser will send the real request.
+// Express only runs middleware attached to the matching HTTP method, so
+// without these, the preflight OPTIONS request 404s and the browser blocks
+// the actual POST — this is what broke the request form submit button.
+app.options("/api/form-token", publicCors);
+app.options("/api/requests", publicCors);
+app.options("/api/contact-info", publicCors);
+
 const tokenLimiter = rateLimit({
   windowMs: 10 * 60 * 1000,
   limit: 30,
@@ -88,6 +103,13 @@ const submitLimiter = rateLimit({
 const adminLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 50,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -178,22 +200,45 @@ app.get("/api/contact-info", publicCors, contactInfoLimiter, (req, res) => {
   res.json({ ok: true, contactInfo: getContactInfo() });
 });
 
-app.get("/gestion", adminLimiter, adminAuth, (req, res) => {
+// The page and its script are served unconditionally — gestion.html renders
+// a login form client-side when the API calls below come back 401. This
+// avoids relying on the browser's native Basic Auth prompt, which behaves
+// inconsistently (or is blocked outright) in embedded/in-app browsers.
+app.get("/gestion", adminLimiter, (req, res) => {
   res.sendFile(path.join(__dirname, "public", "gestion.html"));
 });
 
-app.get("/gestion.js", adminLimiter, adminAuth, (req, res) => {
+app.get("/gestion.js", adminLimiter, (req, res) => {
   res.sendFile(path.join(__dirname, "public", "gestion.js"));
 });
 
-app.get("/api/gestion/requests", adminLimiter, adminAuth, (req, res) => {
+app.post("/api/gestion/login", loginLimiter, (req, res) => {
+  const { username, password } = req.body || {};
+
+  if (!isAdminConfigured()) {
+    return res.status(503).json({ ok: false, error: "admin_not_configured" });
+  }
+  if (!checkCredentials(username, password)) {
+    return res.status(401).json({ ok: false, error: "بيانات الدخول غير صحيحة." });
+  }
+
+  setSessionCookie(res, req);
+  res.json({ ok: true });
+});
+
+app.post("/api/gestion/logout", (req, res) => {
+  clearSessionCookie(res);
+  res.json({ ok: true });
+});
+
+app.get("/api/gestion/requests", adminLimiter, requireSession, (req, res) => {
   const search = typeof req.query.search === "string" ? req.query.search.slice(0, 100) : "";
   const limit = Math.min(Number(req.query.limit) || 50, 200);
   const offset = Math.max(Number(req.query.offset) || 0, 0);
   res.json({ ok: true, requests: listRequests({ search, limit, offset }) });
 });
 
-app.patch("/api/gestion/requests/:id", adminLimiter, adminAuth, (req, res) => {
+app.patch("/api/gestion/requests/:id", adminLimiter, requireSession, (req, res) => {
   const id = Number(req.params.id);
   const { status } = req.body || {};
 
@@ -205,11 +250,11 @@ app.patch("/api/gestion/requests/:id", adminLimiter, adminAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-app.get("/api/gestion/stats", adminLimiter, adminAuth, (req, res) => {
+app.get("/api/gestion/stats", adminLimiter, requireSession, (req, res) => {
   res.json({ ok: true, stats: getStats() });
 });
 
-app.patch("/api/gestion/contact-info", adminLimiter, adminAuth, (req, res) => {
+app.patch("/api/gestion/contact-info", adminLimiter, requireSession, (req, res) => {
   const body = req.body || {};
   const phone = sanitizeField(body.phone, CONTACT_FIELD_LIMITS.phone);
   const email = sanitizeField(body.email, CONTACT_FIELD_LIMITS.email);

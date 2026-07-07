@@ -111,81 +111,111 @@
     .badge.sent { background: #dcfce7; color: #15803d; }
     .badge.notsent { background: #fee2e2; color: #b91c1c; }
     .save-msg { font-size: 13px; margin-right: 10px; }
+    .logout-btn { background: rgba(255,255,255,0.1); }
+    #login-screen {
+      min-height: 100svh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    #login-screen .card { width: 100%; max-width: 360px; }
+    #login-screen h1 { font-size: 18px; margin: 0 0 16px; text-align: center; }
+    #login-screen input { margin-bottom: 10px; }
+    #login-error { color: #b91c1c; font-size: 13px; min-height: 18px; margin-bottom: 8px; }
+    #app { display: none; }
   </style>
 </head>
 <body>
-  <header>
-    <h1>لوحة تحكم AutoDz Vip</h1>
-    <span id="count" class="muted" style="color:#cbd5e1;"></span>
-  </header>
+  <div id="login-screen">
+    <form class="card" id="login-form">
+      <h1>تسجيل الدخول للوحة التحكم</h1>
+      <label>اسم المستخدم</label>
+      <input type="text" id="login-username" autocomplete="username" required />
+      <label>كلمة المرور</label>
+      <input type="password" id="login-password" autocomplete="current-password" required />
+      <p id="login-error"></p>
+      <button type="submit" style="width:100%;">دخول</button>
+    </form>
+  </div>
 
-  <section>
-    <h2>إحصائيات</h2>
-    <div class="stats-grid" id="stats"></div>
-  </section>
+  <div id="app">
+    <header>
+      <h1>لوحة تحكم AutoDz Vip</h1>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span id="count" class="muted" style="color:#cbd5e1;"></span>
+        <button id="logout" class="logout-btn">خروج</button>
+      </div>
+    </header>
 
-  <section>
-    <h2>معلومات التواصل</h2>
-    <div class="card">
-      <div class="contact-grid">
-        <div>
-          <label>رقم الهاتف / واتساب</label>
-          <input type="text" id="ci-phone" placeholder="0770589042" />
+    <section>
+      <h2>إحصائيات</h2>
+      <div class="stats-grid" id="stats"></div>
+    </section>
+
+    <section>
+      <h2>معلومات التواصل</h2>
+      <div class="card">
+        <div class="contact-grid">
+          <div>
+            <label>رقم الهاتف / واتساب</label>
+            <input type="text" id="ci-phone" placeholder="0770589042" />
+          </div>
+          <div>
+            <label>البريد الإلكتروني</label>
+            <input type="email" id="ci-email" placeholder="contact@autodzvip.com" />
+          </div>
+          <div>
+            <label>فيسبوك</label>
+            <input type="text" id="ci-facebook" placeholder="https://facebook.com/..." />
+          </div>
+          <div>
+            <label>إنستغرام</label>
+            <input type="text" id="ci-instagram" placeholder="https://instagram.com/..." />
+          </div>
+          <div>
+            <label>تيك توك</label>
+            <input type="text" id="ci-tiktok" placeholder="https://tiktok.com/@..." />
+          </div>
         </div>
-        <div>
-          <label>البريد الإلكتروني</label>
-          <input type="email" id="ci-email" placeholder="contact@autodzvip.com" />
-        </div>
-        <div>
-          <label>فيسبوك</label>
-          <input type="text" id="ci-facebook" placeholder="https://facebook.com/..." />
-        </div>
-        <div>
-          <label>إنستغرام</label>
-          <input type="text" id="ci-instagram" placeholder="https://instagram.com/..." />
-        </div>
-        <div>
-          <label>تيك توك</label>
-          <input type="text" id="ci-tiktok" placeholder="https://tiktok.com/@..." />
+        <div style="margin-top:12px; display:flex; align-items:center;">
+          <button id="save-contact">حفظ المعلومات</button>
+          <span id="save-msg" class="save-msg"></span>
         </div>
       </div>
-      <div style="margin-top:12px; display:flex; align-items:center;">
-        <button id="save-contact">حفظ المعلومات</button>
-        <span id="save-msg" class="save-msg"></span>
-      </div>
-    </div>
-  </section>
+    </section>
 
-  <section>
-    <h2>الطلبات</h2>
-    <div class="toolbar">
-      <input type="search" id="search" placeholder="ابحث بالاسم، الهاتف، السيارة، القطعة..." />
-      <button id="refresh">تحديث</button>
-    </div>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>التاريخ</th>
-            <th>الاسم</th>
-            <th>الهاتف</th>
-            <th>الولاية</th>
-            <th>السيارة</th>
-            <th>السنة</th>
-            <th>المحرك</th>
-            <th>القطعة</th>
-            <th>الحالة المطلوبة</th>
-            <th>ملاحظات</th>
-            <th>تيليجرام</th>
-            <th>الحالة</th>
-          </tr>
-        </thead>
-        <tbody id="rows"></tbody>
-      </table>
-      <p id="empty" class="muted" style="padding:20px;" hidden>لا توجد طلبات مطابقة.</p>
-    </div>
-  </section>
+    <section>
+      <h2>الطلبات</h2>
+      <div class="toolbar">
+        <input type="search" id="search" placeholder="ابحث بالاسم، الهاتف، السيارة، القطعة..." />
+        <button id="refresh">تحديث</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>التاريخ</th>
+              <th>الاسم</th>
+              <th>الهاتف</th>
+              <th>الولاية</th>
+              <th>السيارة</th>
+              <th>السنة</th>
+              <th>المحرك</th>
+              <th>القطعة</th>
+              <th>الحالة المطلوبة</th>
+              <th>ملاحظات</th>
+              <th>تيليجرام</th>
+              <th>الحالة</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+        <p id="empty" class="muted" style="padding:20px;" hidden>لا توجد طلبات مطابقة.</p>
+      </div>
+    </section>
+  </div>
 
   <script src="/gestion.js" defer></script>
 </body>

@@ -4,6 +4,9 @@ const emptyEl = document.getElementById("empty");
 const countEl = document.getElementById("count");
 const searchEl = document.getElementById("search");
 const statsEl = document.getElementById("stats");
+const loginScreen = document.getElementById("login-screen");
+const appEl = document.getElementById("app");
+const loginError = document.getElementById("login-error");
 
 function escapeHtml(value) {
   const div = document.createElement("div");
@@ -17,9 +20,24 @@ function statusOptions(current) {
   ).join("");
 }
 
+function showLogin() {
+  loginScreen.style.display = "flex";
+  appEl.style.display = "none";
+}
+
+function showApp() {
+  loginScreen.style.display = "none";
+  appEl.style.display = "block";
+}
+
 async function loadStats() {
   const res = await fetch("/api/gestion/stats");
-  if (!res.ok) return;
+  if (res.status === 401) {
+    showLogin();
+    return false;
+  }
+  if (!res.ok) return false;
+
   const data = await res.json();
   const s = data.stats;
 
@@ -43,6 +61,7 @@ async function loadStats() {
       .join("");
     statsEl.innerHTML += topHtml;
   }
+  return true;
 }
 
 async function loadContactInfo() {
@@ -72,6 +91,7 @@ document.getElementById("save-contact").addEventListener("click", async () => {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
+  if (res.status === 401) return showLogin();
   const data = await res.json().catch(() => ({}));
   msgEl.textContent = res.ok && data.ok ? "تم الحفظ بنجاح ✓" : (data.error || "فشل الحفظ");
   setTimeout(() => { msgEl.textContent = ""; }, 3000);
@@ -81,7 +101,7 @@ async function load() {
   const search = searchEl.value.trim();
   const res = await fetch(`/api/gestion/requests?search=${encodeURIComponent(search)}`);
   if (res.status === 401) {
-    document.body.innerHTML = '<p class="muted" style="padding:20px;">انتهت صلاحية الجلسة، أعد تحميل الصفحة.</p>';
+    showLogin();
     return;
   }
   const data = await res.json();
@@ -119,15 +139,23 @@ async function load() {
     .join("");
 }
 
+async function loadDashboard() {
+  showApp();
+  await load();
+  await loadStats();
+  await loadContactInfo();
+}
+
 rowsEl.addEventListener("change", async (e) => {
   if (e.target.tagName !== "SELECT") return;
   const id = e.target.dataset.id;
   const status = e.target.value;
-  await fetch(`/api/gestion/requests/${id}`, {
+  const res = await fetch(`/api/gestion/requests/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ status }),
   });
+  if (res.status === 401) return showLogin();
   loadStats();
 });
 
@@ -136,12 +164,40 @@ document.getElementById("refresh").addEventListener("click", () => {
   loadStats();
 });
 
+document.getElementById("logout").addEventListener("click", async () => {
+  await fetch("/api/gestion/logout", { method: "POST" });
+  showLogin();
+});
+
+document.getElementById("login-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  loginError.textContent = "";
+  const username = document.getElementById("login-username").value.trim();
+  const password = document.getElementById("login-password").value;
+
+  const res = await fetch("/api/gestion/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  });
+  const data = await res.json().catch(() => ({}));
+
+  if (res.ok && data.ok) {
+    document.getElementById("login-password").value = "";
+    loadDashboard();
+  } else {
+    loginError.textContent = data.error || "فشل تسجيل الدخول.";
+  }
+});
+
 let searchTimer;
 searchEl.addEventListener("input", () => {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(load, 300);
 });
 
-load();
-loadStats();
-loadContactInfo();
+// On first load, try the dashboard directly — if there's still a valid
+// session cookie from before, this skips the login screen entirely.
+loadStats().then((ok) => {
+  if (ok) loadDashboard();
+});

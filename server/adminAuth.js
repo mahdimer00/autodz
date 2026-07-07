@@ -2,6 +2,9 @@ import crypto from "node:crypto";
 
 const ADMIN_USER = process.env.ADMIN_USER;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+const SESSION_SECRET = process.env.HMAC_SECRET;
+const SESSION_MAX_AGE_MS = 12 * 60 * 60 * 1000; // 12 hours
+const COOKIE_NAME = "gestion_session";
 
 function timingSafeStringEqual(a, b) {
   const hashA = crypto.createHash("sha256").update(a).digest();
@@ -9,43 +12,84 @@ function timingSafeStringEqual(a, b) {
   return crypto.timingSafeEqual(hashA, hashB);
 }
 
-export function isAdminConfigured() {
-  return Boolean(ADMIN_USER && ADMIN_PASSWORD);
+function sign(payload) {
+  return crypto.createHmac("sha512", SESSION_SECRET).update(payload).digest("hex");
 }
 
-export function adminAuth(req, res, next) {
-  if (!isAdminConfigured()) {
-    return res.status(503).send("Admin panel is not configured.");
+function parseCookies(header) {
+  const out = {};
+  if (!header) return out;
+  for (const part of header.split(";")) {
+    const idx = part.indexOf("=");
+    if (idx === -1) continue;
+    out[part.slice(0, idx).trim()] = decodeURIComponent(part.slice(idx + 1).trim());
+  }
+  return out;
+}
+
+export function isAdminConfigured() {
+  return Boolean(ADMIN_USER && ADMIN_PASSWORD && SESSION_SECRET);
+}
+
+export function checkCredentials(user, password) {
+  if (!isAdminConfigured()) return false;
+  return (
+    timingSafeStringEqual(String(user || ""), ADMIN_USER) &&
+    timingSafeStringEqual(String(password || ""), ADMIN_PASSWORD)
+  );
+}
+
+export function createSessionToken() {
+  const payload = JSON.stringify({ exp: Date.now() + SESSION_MAX_AGE_MS });
+  const encoded = Buffer.from(payload, "utf8").toString("base64url");
+  return `${encoded}.${sign(encoded)}`;
+}
+
+function verifySessionToken(token) {
+  if (typeof token !== "string" || !token.includes(".")) return false;
+
+  const [encoded, signature] = token.split(".");
+  if (!encoded || !signature) return false;
+
+  const expected = sign(encoded);
+  if (
+    signature.length !== expected.length ||
+    !crypto.timingSafeEqual(Buffer.from(signature, "hex"), Buffer.from(expected, "hex"))
+  ) {
+    return false;
   }
 
-  const header = req.headers.authorization || "";
-  const [scheme, encoded] = header.split(" ");
-
-  if (scheme !== "Basic" || !encoded) {
-    res.set("WWW-Authenticate", 'Basic realm="AutoDz Vip Admin"');
-    return res.status(401).send("Authentication required.");
-  }
-
-  let decoded;
   try {
-    decoded = Buffer.from(encoded, "base64").toString("utf8");
+    const { exp } = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8"));
+    return typeof exp === "number" && Date.now() < exp;
   } catch {
-    res.set("WWW-Authenticate", 'Basic realm="AutoDz Vip Admin"');
-    return res.status(401).send("Invalid credentials.");
+    return false;
+  }
+}
+
+export function requireSession(req, res, next) {
+  if (!isAdminConfigured()) {
+    return res.status(503).json({ ok: false, error: "admin_not_configured" });
   }
 
-  const sepIndex = decoded.indexOf(":");
-  const user = sepIndex === -1 ? decoded : decoded.slice(0, sepIndex);
-  const pass = sepIndex === -1 ? "" : decoded.slice(sepIndex + 1);
-
-  const ok =
-    timingSafeStringEqual(user, ADMIN_USER) &&
-    timingSafeStringEqual(pass, ADMIN_PASSWORD);
-
-  if (!ok) {
-    res.set("WWW-Authenticate", 'Basic realm="AutoDz Vip Admin"');
-    return res.status(401).send("Invalid credentials.");
+  const cookies = parseCookies(req.headers.cookie);
+  if (verifySessionToken(cookies[COOKIE_NAME])) {
+    return next();
   }
 
-  next();
+  return res.status(401).json({ ok: false, error: "unauthorized" });
+}
+
+export function setSessionCookie(res, req) {
+  res.cookie(COOKIE_NAME, createSessionToken(), {
+    httpOnly: true,
+    secure: req.secure,
+    sameSite: "lax",
+    path: "/",
+    maxAge: SESSION_MAX_AGE_MS,
+  });
+}
+
+export function clearSessionCookie(res) {
+  res.clearCookie(COOKIE_NAME, { path: "/" });
 }
