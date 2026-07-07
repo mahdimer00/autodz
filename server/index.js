@@ -48,6 +48,15 @@ app.set("trust proxy", process.env.TRUST_PROXY === "1");
 app.use(helmet());
 app.use(express.json({ limit: "15kb" }));
 
+// This API is never meant to be cached by any intermediary (CDN, browser).
+// Critically, this prevents an edge cache like Netlify's from serving a
+// cached 401 (or a cached admin response) to a different visitor — Netlify's
+// proxy redirects cache by URL only, not by the Authorization header.
+app.use((req, res, next) => {
+  res.set("Cache-Control", "no-store");
+  next();
+});
+
 // CORS only applies to the public endpoints the separately-hosted frontend
 // calls cross-origin (e.g. Netlify). /gestion/* is always same-origin (served
 // by this same process) and deliberately has no CORS middleware.

@@ -32,3 +32,21 @@
   from = "/api/contact-info"
   to = "https://api.autodz.vip/api/contact-info"
   status = 200
+
+# Never let Netlify's edge cache these proxied, authenticated responses —
+# its cache key ignores the Authorization header, so a cached 401 (or a
+# cached admin response) would otherwise be served to every visitor.
+[[headers]]
+  for = "/gestion*"
+  [headers.values]
+    Cache-Control = "no-store"
+
+[[headers]]
+  for = "/api/gestion/*"
+  [headers.values]
+    Cache-Control = "no-store"
+
+[[headers]]
+  for = "/api/contact-info"
+  [headers.values]
+    Cache-Control = "no-store"
