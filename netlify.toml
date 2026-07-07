@@ -8,3 +8,27 @@
     X-Frame-Options = "SAMEORIGIN"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
+
+# Proxy the admin dashboard through to the backend on the VPS so it's
+# reachable at autodz.vip/gestion instead of only api.autodz.vip/gestion.
+# Status 200 makes this a transparent proxy (URL stays autodz.vip in the
+# browser) rather than a redirect.
+[[redirects]]
+  from = "/gestion"
+  to = "https://api.autodz.vip/gestion"
+  status = 200
+
+[[redirects]]
+  from = "/gestion.js"
+  to = "https://api.autodz.vip/gestion.js"
+  status = 200
+
+[[redirects]]
+  from = "/api/gestion/*"
+  to = "https://api.autodz.vip/api/gestion/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/api/contact-info"
+  to = "https://api.autodz.vip/api/contact-info"
+  status = 200
